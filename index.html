@@ -47,6 +47,7 @@
             <span class="pulse-dot"></span>
             <span>Utpal's AI Assistant</span>
           </div>
+          <button class="icon-btn round mobile-only" id="historyToggle" title="History">↺</button>
           <button class="icon-btn round" id="chatMenu" title="Clear chat">⋮</button>
         </div>
 
@@ -80,13 +81,16 @@
         </div>
       </div>
 
-      <aside class="history-panel">
+      <aside class="history-panel" id="historyPanel">
+        <button class="icon-btn round history-close-btn mobile-only" id="historyClose" title="Close">✕</button>
         <div class="history-header">
           <span class="history-title">History Chat</span>
           <button class="new-chat-btn" id="newChatBtn"><span class="plus">＋</span>New Chat</button>
         </div>
         <div class="history-list" id="historyList"></div>
       </aside>
+
+      <div class="history-backdrop" id="historyBackdrop"></div>
     </div>
   </section>
 </main>

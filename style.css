@@ -323,7 +323,68 @@ input{caret-color:var(--accent)}
 }
 .history-item-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+.mobile-only{display:none}
+.history-backdrop{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.5);z-index:49;
+}
+
 @media (max-width: 900px){
-  .history-panel{display:none}
-  .rail{width:48px}
+  body,.stage{overflow-x:hidden}
+
+  .stage{
+    height:100vh;
+    height:100dvh;
+    padding:calc(18px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
+  }
+
+  .mobile-only{display:flex}
+
+  .topbar{gap:10px}
+  .logo{width:38px;height:38px;font-size:16px;border-radius:11px}
+  .tabs{flex:1;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab-btn{padding:9px 14px;font-size:13.5px}
+  .top-actions{gap:6px;padding:5px}
+  .theme-icon{width:32px;height:32px;font-size:13px}
+  .icon-btn{width:34px;height:34px;font-size:13px}
+  .icon-btn.round{width:36px;height:36px;font-size:14px}
+  .avatar{width:34px;height:34px;font-size:12px}
+
+  .rail{width:48px;overflow-y:auto}
+  .rail-btn{width:clamp(40px,4.6vh,46px);height:clamp(40px,4.6vh,46px)}
+
+  .bot-bubble{max-width:min(660px,92vw)}
+  .user-bubble{max-width:min(540px,92vw)}
+  .message-list{max-width:min(820px,94vw)}
+  .composer-box{max-width:min(820px,94vw)}
+  .composer-input-row input{font-size:16px}
+
+  .history-panel{
+    position:fixed;top:0;right:0;
+    height:100vh;height:100dvh;
+    width:min(85vw,340px);
+    z-index:50;
+    border-radius:0;
+    border-left:1px solid rgba(255,255,255,.09);
+    transform:translateX(100%);
+    transition:transform .28s ease;
+  }
+  .history-panel.open{transform:translateX(0)}
+  .history-backdrop.open{display:block}
+  .history-close-btn{position:absolute;top:14px;right:14px;z-index:2}
+}
+
+@media (max-width: 480px){
+  body,.stage{overflow-x:hidden}
+
+  .messages{padding:0 13px}
+  .composer{padding:10px 13px 16px}
+  .composer-box{padding:11px 13px 10px}
+  .chip{padding:7px 12px;font-size:13px}
+
+  .logo{width:34px;height:34px;font-size:14px}
+  .avatar{width:30px;height:30px;font-size:11px}
+  .icon-btn{width:30px;height:30px}
+  .icon-btn.round{width:32px;height:32px;font-size:13px}
 }

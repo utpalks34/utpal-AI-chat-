@@ -65,6 +65,10 @@
     railClear: document.getElementById('railClear'),
     chatMenu: document.getElementById('chatMenu'),
     newChatBtn: document.getElementById('newChatBtn'),
+    historyPanel: document.getElementById('historyPanel'),
+    historyToggle: document.getElementById('historyToggle'),
+    historyClose: document.getElementById('historyClose'),
+    historyBackdrop: document.getElementById('historyBackdrop'),
   };
 
   function match(q) {
@@ -273,6 +277,25 @@
     el.newChatBtn.addEventListener('click', reset);
   }
 
+  function wireMobileDrawer() {
+    if (!el.historyPanel || !el.historyToggle) return;
+
+    function openDrawer() {
+      el.historyPanel.classList.add('open');
+      if (el.historyBackdrop) el.historyBackdrop.classList.add('open');
+    }
+    function closeDrawer() {
+      el.historyPanel.classList.remove('open');
+      if (el.historyBackdrop) el.historyBackdrop.classList.remove('open');
+    }
+
+    el.historyToggle.addEventListener('click', openDrawer);
+    if (el.historyClose) el.historyClose.addEventListener('click', closeDrawer);
+    if (el.historyBackdrop) el.historyBackdrop.addEventListener('click', closeDrawer);
+    el.historyList.addEventListener('click', closeDrawer);
+    el.newChatBtn.addEventListener('click', closeDrawer);
+  }
+
   function init() {
     renderTabs();
     renderRail();
@@ -280,6 +303,7 @@
     renderHistory();
     renderMessages();
     wireComposer();
+    wireMobileDrawer();
   }
 
   document.addEventListener('DOMContentLoaded', init);
