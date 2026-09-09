@@ -8,12 +8,67 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+
+<!-- Three.js is pulled straight from a CDN as ES modules so this stays a
+     plain static site — no npm, no bundler. The import map is what lets
+     cinematic-scene.js write `import ... from 'three'` in the browser. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 <div class="bg-drift"></div>
 <div class="bg-radial"></div>
 
-<main class="stage">
+<!-- ===== CINEMATIC 3D INTRO (Phases 1-3 of 6) =====
+     A real Three.js environment, taking over the slot the CSS-drawn
+     #roomScene used to hold: the studio room, and a camera that walks from a
+     wide establishing shot to a close-up of the laptop's keyboard as you
+     scroll. All of the WebGL lives in cinematic-scene.js — script.js is
+     untouched.
+
+     #cineIntro is its own scroll container rather than the page being one,
+     because <body> is overflow:hidden for the chat UI underneath. The tall
+     #cineScrollTrack is the camera's timeline and holds nothing but the
+     canvas, which sticks to the top of it while the track scrolls past. -->
+<div id="cineIntro" aria-hidden="true">
+  <div id="cineScrollTrack">
+    <canvas id="cineCanvas"></canvas>
+  </div>
+
+  <!-- Fixed, so it sits still while the track moves behind it. Fades out on
+       the first flick of the wheel; without it the intro looks like a static
+       render with no way in. -->
+  <div id="cineScrollCue">
+    <span class="cine-cue-label">Scroll</span>
+    <span class="cine-cue-line"></span>
+  </div>
+</div>
+
+<!-- ===== SCREEN UI (CSS3D) =====
+     The chat UI's only home: the laptop's screen in the room above. There
+     is no second laptop drawn in CSS — #cineUI is the layer cinematic-scene.js
+     hands to a CSS3DRenderer, a full-viewport div laid exactly over
+     #cineCanvas and drawn from the same camera, and #screenUI is the element
+     it wraps in a CSS3DObject and pins to the panel's front face: position,
+     rotation and size are all measured off the screen mesh, so the live
+     interface sits on that surface and moves with the room. #screenUIFit is
+     the scale wrapper: the chat UI is laid out at its desktop design width
+     inside it and drawn down to the panel's box (see SCREEN UI in style.css
+     and SCREEN_UI in cinematic-scene.js), so type stays legible once the lens
+     is in. The module moves #screenUI into the renderer's own camera element
+     on its first frame; until then it sits here, dark, behind the intro.
+     Everything inside <main class="stage"> is untouched, and script.js knows
+     nothing about any of this. -->
+<div id="cineUI">
+  <div id="screenUI">
+    <div id="screenUIFit">
+<main class="stage" id="stage">
   <section class="shell">
     <div class="corner-glow"></div>
 
@@ -94,7 +149,11 @@
     </div>
   </section>
 </main>
+    </div>
+  </div>
+</div>
 
 <script src="script.js"></script>
+<script type="module" src="cinematic-scene.js"></script>
 </body>
 </html>

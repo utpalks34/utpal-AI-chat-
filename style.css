@@ -388,3 +388,207 @@ input{caret-color:var(--accent)}
   .icon-btn{width:30px;height:30px}
   .icon-btn.round{width:32px;height:32px;font-size:13px}
 }
+
+/* ===== CINEMATIC 3D INTRO (Phase 1 of 6) =====
+   Container for the Three.js canvas that took over from the CSS-drawn
+   #roomScene. Fixed and full-viewport so the scene is the whole frame; z-index
+   sits above the chat UI so it is what you see until the handoff. Black
+   underneath, which is only visible for the frame before WebGL's first draw. The scroll-driven behaviour arrives in Phase 3;
+   for now this is a static, pinned viewport. */
+#cineIntro{
+  position:fixed;
+  inset:0;
+  z-index:10001;
+  width:100vw;
+  height:100vh;      /* fallback for browsers without dynamic viewport units */
+  height:100dvh;
+  overflow:hidden;
+  background:#000;
+}
+
+/* Sized in CSS pixels here; cinematic-scene.js sets the renderer's backing
+   store from devicePixelRatio and calls setSize(w, h, false), so it never
+   fights these rules. `display:block` kills the inline-element baseline gap. */
+#cineCanvas{
+  display:block;
+  width:100%;
+  height:100%;
+}
+
+/* ===== CINEMATIC SCROLL TRACK (Phase 3) =====
+   The camera move is driven by scrolling, but <body> is overflow:hidden and
+   has to stay that way — the chat UI underneath is laid out against a fixed
+   100vh viewport, and #stage's homography is measured against it. So the
+   scroll lives *inside* #cineIntro instead of on the document: the overlay
+   becomes its own scroll container over a tall track, and scrolling the intro
+   drives the animation without the page ever moving.
+
+   Overriding the earlier #cineIntro rule rather than editing it, per the
+   convention at the top of this file: each pass appends a block. */
+#cineIntro{
+  overflow-y:auto;
+  overflow-x:hidden;
+  /* Stops the wheel chaining out to the document at either end of the track,
+     which on some browsers shows up as the whole page rubber-banding. */
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  /* The track is a camera timeline, not content — a scrollbar thumb sitting
+     over the shot would give away that it is only 400vh of empty div. */
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+#cineIntro::-webkit-scrollbar{width:0;height:0}
+
+/* 400vh — three viewport heights of travel after the opening screenful. Long
+   enough that the dolly reads as a slow walk up to the desk rather than a
+   snap, short enough that it doesn't outstay its welcome. cinematic-scene.js
+   never hardcodes this: it measures scrollHeight, so the two can't drift. */
+#cineScrollTrack{
+  position:relative;
+  width:100%;
+  height:400vh;
+}
+
+/* Sticky, not fixed. A fixed canvas would be positioned against the viewport
+   and would also work, but sticky keeps it inside the scroller's own flow, so
+   it can't outlive or escape #cineIntro's box. Height is restated here
+   because the earlier rule's 100% now resolves against the 400vh track. */
+#cineCanvas{
+  position:sticky;
+  top:0;
+  height:100vh;      /* fallback for browsers without dynamic viewport units */
+  height:100dvh;
+}
+
+/* The only affordance telling you the shot is scrollable. Fixed, so it holds
+   still while the track moves behind it; cinematic-scene.js adds .is-gone as
+   soon as the scroll actually starts, and it never comes back. */
+#cineScrollCue{
+  position:fixed;
+  left:50%;
+  bottom:34px;
+  transform:translateX(-50%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  pointer-events:none;
+  transition:opacity .45s ease, transform .45s ease;
+}
+#cineScrollCue.is-gone{
+  opacity:0;
+  transform:translateX(-50%) translateY(10px);
+}
+.cine-cue-label{
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:.34em;
+  text-transform:uppercase;
+  /* Warm off-white rather than --accent: the green belongs to the chat UI,
+     and the room is lit by daylight. */
+  color:rgba(245,240,232,.72);
+  text-shadow:0 1px 12px rgba(0,0,0,.65);
+}
+/* A 1px rule with a highlight sliding down it — a scroll hint that doesn't
+   need an arrow glyph and doesn't fight the photography. */
+.cine-cue-line{
+  position:relative;
+  width:1px;
+  height:46px;
+  background:rgba(245,240,232,.22);
+  overflow:hidden;
+}
+.cine-cue-line::after{
+  content:"";
+  position:absolute;
+  left:0;
+  top:-46px;
+  width:1px;
+  height:46px;
+  background:linear-gradient(to bottom, transparent, rgba(245,240,232,.95));
+  animation:cineCueFall 2.1s cubic-bezier(.5,0,.5,1) infinite;
+}
+@keyframes cineCueFall{
+  0%{transform:translateY(0)}
+  60%,100%{transform:translateY(92px)}
+}
+
+/* ===== SCREEN UI (CSS3D) =====
+   The chat UI on the laptop's screen in the 3D room. There is no CSS-drawn
+   laptop any more and no crossfade to a full-screen page: cinematic-scene.js
+   runs a CSS3DRenderer alongside its WebGLRenderer, from the same camera, and
+   #screenUI is the CSS3DObject it pins to the panel mesh's front face. The
+   renderer writes the perspective and the matrix3d on every frame the camera
+   moves; all this block owns is the layer, the fade and the scale wrapper.
+
+   #cineUI is the renderer's own element — the module passes it in rather
+   than creating one so the layer's rules can live here — laid over
+   #cineIntro's canvas at the same size. pointer-events:none, and inherited
+   as none by everything the renderer puts inside it, so the wheel and the
+   power button's clicks fall through to the canvas; the module switches
+   #screenUI's own pointer-events (inline, since CSS3DObject sets it inline)
+   to auto on the same beat as .is-on.
+
+   #screenUI is sized to the panel's virtual resolution and #screenUIFit to
+   the layout's design size, scaled down to fit; the numbers here are the
+   defaults for the panel's measured 16:10 and the module rewrites all four
+   from SCREEN_UI once the model is in. The transition length is
+   SCREEN_UI.fade in cinematic-scene.js — they have to move together.
+
+   A new trailing block rather than an edit to the rules above, per the
+   convention at the top of this file. */
+#cineUI{
+  position:fixed;
+  inset:0;
+  z-index:10002;          /* over #cineIntro (10001): drawn from its camera, so on top of its canvas */
+  pointer-events:none;
+}
+
+#screenUI{
+  width:1280px;           /* SCREEN_UI.pixelsAcross */
+  height:800px;           /* pixelsAcross / the panel's measured aspect */
+  overflow:hidden;        /* the stage's box is the panel's box, nothing past it */
+  background:#000;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 650ms ease;   /* SCREEN_UI.fade */
+  /* The element is a plane in a preserve-3d parent; seen from behind it
+     would be a mirrored chat UI, and it is never meant to be seen from
+     behind. */
+  backface-visibility:hidden;
+}
+#screenUI.is-on{
+  opacity:1;
+  pointer-events:auto;
+}
+
+/* The fit box. The chat UI is a desktop layout — a 1420px shell inside 26px
+   of stage padding, a 56px rail, the chat column and a 232-340px history
+   panel side by side — and at the panel's own 1280 pixels those three
+   columns crowd until the history panel and the last chip run off. So it is
+   laid out at pixelsAcross / uiScale and drawn down as one picture: a single
+   uniform scale is the one thing that shrinks a layout without changing a
+   proportion inside it. Pinned to the panel's top-left corner and scaled
+   from the same point, so the transform is a pure shrink. */
+#screenUIFit{
+  position:absolute;
+  top:0;
+  left:0;
+  width:1391px;           /* 1280 / 0.92 */
+  height:870px;
+  transform:scale(.92);   /* SCREEN_UI.uiScale */
+  transform-origin:top left;
+}
+
+/* The only thing the panel asks of the chat UI: fill the fit box instead of
+   the viewport. The id-scoped selector outranks the .stage rules above and
+   the 100dvh one in the 900px media block; nothing inside .shell changes. */
+#screenUIFit > .stage{
+  width:100%;
+  height:100%;
+}
+
+@media (prefers-reduced-motion: reduce){
+  /* no fade: the UI is simply on when the panel wakes */
+  #screenUI{transition:none}
+}
