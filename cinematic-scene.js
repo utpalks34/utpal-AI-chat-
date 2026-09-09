@@ -323,6 +323,15 @@ function init() {
      --------------------------------------------------------------------- */
   const css3d = new CSS3DRenderer(uiLayer ? { element: uiLayer } : {});
   css3d.setSize(window.innerWidth, window.innerHeight);
+
+  /* The renderer writes overflow:hidden on its layer, which clips — but it
+     also makes the layer a scroll container, and a browser scrolls a scroll
+     container to reveal whatever gets focus inside it. With a 3D-transformed
+     subtree the layer's scrollable extent is whatever the projected planes
+     sweep out, so focusing the composer could shove the whole picture over.
+     `clip` clips the same and scrolls never; a browser without it ignores
+     the assignment and keeps `hidden`, i.e. exactly what it had. */
+  css3d.domElement.style.overflow = 'clip';
   if (!uiLayer) {
     // Older markup without the layer: make one, in the same place.
     css3d.domElement.id = 'cineUI';
@@ -1785,6 +1794,7 @@ function init() {
   let powerClock = 0;          // seconds into the move; runs backwards on the way out
   let handedOff = false;       // has `cine:screen-on` gone out?
   let uiAwake = false;         // has the chat UI started fading in?
+  let uiFlat = false;          // is the chat UI laid flat, out of the CSS3D scene? (see FLAT SCREEN UI)
   let dofFade = 1;             // the room blur, faded out as the panel arrives
   let lastScreenGlow = -1;     // as with lastGlow: no uniform write on a hold
   let pressScrollTop = 0;      // the scroll position the press froze, restored on the way out
@@ -2297,6 +2307,11 @@ function init() {
        asked to leave, so it is wound back to the end of the move itself. */
     powerClock = Math.min(powerClock, POWER_ON.move);
 
+    /* Back onto the panel mesh before anything moves: the flat placement is
+       only right for a lens that is square to the panel, and the retreat
+       leaves that on its first frame. */
+    unflattenScreenUI();
+
     /* Immediately, rather than at the matching point on the way back down
        the clock: the fade is 650ms against a 1.15s retreat, so starting it
        now puts the glass dark well before the lens has finished pulling out
@@ -2308,6 +2323,126 @@ function init() {
     /* The loop parks itself once the panel has settled; there is a move on
        again now. */
     needsRender = true;
+  }
+
+  /* ---------------------------------------------------------------------
+     FLAT SCREEN UI — the chat comes off the 3D pipeline once the lens lands
+     While the camera is moving, the chat has to be a CSS3DObject: it is a
+     plane in the room and it has to track the panel through the move. But
+     once the move has settled the camera is exactly square to the panel (the
+     orientation is screenQuaternion, the position is on the panel's normal),
+     which means the panel is an axis-aligned rectangle on screen — and a
+     rectangle needs no perspective to draw. So at that moment the element
+     is lifted out of the renderer's camera element and placed with a plain
+     2D translate + scale that lands on the same pixels the projection did.
+
+     Why bother, if the picture is the same: because the chat is a live form,
+     and a text input under a perspective() + matrix3d() inside a
+     preserve-3d context is where browsers go wrong — hit-testing through
+     the projection, caret and IME placement, focus scrolling the container,
+     Firefox's handling of form controls in 3D contexts. A 2D transform has
+     none of those problems. The element, its listeners and everything inside
+     <main class="stage"> are untouched; only its parent and its transform
+     change, and both are put back the moment the power-off starts.
+
+     The renderer caches the last transform string it wrote per object and
+     only rewrites on change, so the string is saved here and restored on the
+     way back rather than cleared — cleared, it would stay cleared until the
+     object itself moved. Removed from uiScene while flat so render() never
+     visits it: it would set display and re-append the element to its own
+     camera element.
+     --------------------------------------------------------------------- */
+  const flatSaved = { transform: '', transformOrigin: '', left: '', top: '' };
+  let flatHome = null;      // the renderer's camera element, to go back into
+  let flatStyle = '';       // the last 2D transform written, so a still frame writes nothing
+  const flatCentre = new THREE.Vector3();
+
+  function flattenScreenUI() {
+    if (uiFlat || !uiObject || !uiLayer) return;
+    uiFlat = true;
+
+    flatHome = uiElement.parentNode;
+    flatSaved.transform = uiElement.style.transform;
+    flatSaved.transformOrigin = uiElement.style.transformOrigin;
+    flatSaved.left = uiElement.style.left;
+    flatSaved.top = uiElement.style.top;
+
+    uiScene.remove(uiObject);
+
+    /* Straight into the layer, as a sibling of the renderer's view element
+       and after it, so it paints on top. The element is position:absolute
+       (CSS3DObject sets that inline) and the layer is fixed, full-viewport:
+       pinned at its origin, the transform below does the rest. */
+    uiLayer.appendChild(uiElement);
+    uiElement.style.left = '0';
+    uiElement.style.top = '0';
+    uiElement.style.transformOrigin = '0 0';
+    flatStyle = '';
+    layoutFlatScreenUI();
+  }
+
+  function unflattenScreenUI() {
+    if (!uiFlat) return;
+    uiFlat = false;
+
+    uiElement.style.transform = flatSaved.transform;
+    uiElement.style.transformOrigin = flatSaved.transformOrigin;
+    uiElement.style.left = flatSaved.left;
+    uiElement.style.top = flatSaved.top;
+    if (flatHome) flatHome.appendChild(uiElement);
+
+    uiScene.add(uiObject);
+    needsRender = true;
+  }
+
+  /* The same projection the CSS3DRenderer does, reduced to the square-on
+     case. Its perspective length is projectionMatrix[5] * height/2 in px,
+     and a length x at distance d down the view axis lands at x * fov / d px
+     from the frame's centre — so the element, which the object scales to
+     the panel's width in metres, is drawn at that scale times fov / d. The
+     centre is projected properly rather than assumed to be the frame's
+     middle, so a lens a hair off the normal still lands where the panel is. */
+  function layoutFlatScreenUI() {
+    if (!uiFlat) return;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const fovPx = camera.projectionMatrix.elements[5] * vh * 0.5;
+    const distance = camera.position.distanceTo(screenPlane.centre);
+    if (!(fovPx > 0) || !(distance > 0)) return;
+
+    const scale = uiObject.scale.x * fovPx / distance;
+
+    camera.updateMatrixWorld();
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    flatCentre.copy(screenPlane.centre).project(camera);
+    const cx = (flatCentre.x + 1) * 0.5 * vw;
+    const cy = (1 - flatCentre.y) * 0.5 * vh;
+
+    /* Origin at the element's top-left, so this reads right to left as:
+       centre the box on its own origin, scale it there, carry it to the
+       panel's centre on screen. */
+    const style =
+      'translate(' + cx.toFixed(2) + 'px,' + cy.toFixed(2) + 'px) ' +
+      'scale(' + scale.toFixed(5) + ') ' +
+      'translate(-50%,-50%)';
+    if (style === flatStyle) return;
+    flatStyle = style;
+    uiElement.style.transform = style;
+  }
+
+  /* Run once per drawn frame, after the renderers, so the camera matrices
+     it reads are the ones the frame was drawn with. Flat exactly while the
+     power-on clock is at or past the end of the move and running forward;
+     anything else — the move in, the move out, the dolly — is the 3D case. */
+  function syncFlatScreenUI() {
+    const settled = powered && powerDir > 0 && powerClock >= POWER_ON.move;
+    if (settled) {
+      if (uiFlat) layoutFlatScreenUI();
+      else flattenScreenUI();
+    } else if (uiFlat) {
+      unflattenScreenUI();
+    }
   }
 
   /* ---------------------------------------------------------------------
@@ -2381,6 +2516,11 @@ function init() {
        and after it, so the two can never be a frame apart. */
     css3d.render(uiScene, camera);
 
+    /* After both renderers: the flat placement reads the camera the frame
+       was just drawn with, and the settle frame is drawn once more by the
+       CSS3D path before the element is lifted out of it. */
+    syncFlatScreenUI();
+
     frameHandle = requestAnimationFrame(frame);
   }
   frameHandle = requestAnimationFrame(frame);
@@ -2442,6 +2582,7 @@ function init() {
     get powered() { return powered; },
     get poweredOn() { return isPoweredOn; },
     get reversing() { return powerDir < 0; },
-    get awake() { return uiAwake; }
+    get awake() { return uiAwake; },
+    get flat() { return uiFlat; }
   };
 }
